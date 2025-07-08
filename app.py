@@ -81,7 +81,7 @@ def generate_pdf(data):
 
 # Streamlit App
 st.set_page_config(page_title="Resume Matcher", layout="centered")
-st.title("📄 Smart Resume Matcher (Dark Mode)")
+st.title("📄 Smart Resume Matcher ")
 
 col1, col2 = st.columns(2)
 
