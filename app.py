@@ -76,12 +76,13 @@ def generate_pdf(data):
     for name, score in data:
         pdf.cell(200, 10, txt=f"{name} — Score: {score:.2f}", ln=True)
     buffer = io.BytesIO()
-    pdf.output(buffer)
+    pdf.output(buffer, 'F')
+    buffer.seek(0)
     return buffer.getvalue()
 
 # Streamlit App
 st.set_page_config(page_title="Resume Matcher", layout="centered")
-st.title("📄 Smart Resume Matcher ")
+st.title("📄 Smart Resume Matcher (Dark Mode)")
 
 col1, col2 = st.columns(2)
 
@@ -108,31 +109,33 @@ if st.button("🔍 Match Resumes"):
             scores = match_resumes(jd_text, resume_texts)
             results = sorted(zip(resume_names, scores), key=lambda x: x[1], reverse=True)
 
-        st.subheader("🎯 Top Matching Resumes")
+        if results:
+            st.subheader("🎯 Top Matching Resumes")
+            top_n = st.slider("Select number of top candidates to show:", 1, len(results), min(5, len(results)))
+            top_results = results[:top_n]
 
-        top_n = st.slider("Select number of top candidates to show:", 1, len(results), min(5, len(results)))
-        top_results = results[:top_n]
+            for name, score in top_results:
+                with st.expander(f"{name} — Match Score: {score:.2f}"):
+                    st.write("Resume matches well with the job description.")
 
-        for name, score in top_results:
-            with st.expander(f"{name} — Match Score: {score:.2f}"):
-                st.write("Resume matches well with the job description.")
+            # CSV download
+            df_results = pd.DataFrame(top_results, columns=["Candidate", "Match Score"])
+            csv_buffer = io.StringIO()
+            df_results.to_csv(csv_buffer, index=False)
+            st.download_button(
+                label="📥 Download Top Results (CSV)",
+                data=csv_buffer.getvalue(),
+                file_name="top_ranked_resumes.csv",
+                mime="text/csv"
+            )
 
-        # CSV download
-        df_results = pd.DataFrame(top_results, columns=["Candidate", "Match Score"])
-        csv_buffer = io.StringIO()
-        df_results.to_csv(csv_buffer, index=False)
-        st.download_button(
-            label="📥 Download Top Results (CSV)",
-            data=csv_buffer.getvalue(),
-            file_name="top_ranked_resumes.csv",
-            mime="text/csv"
-        )
-
-        # PDF download
-        pdf_data = generate_pdf(top_results)
-        st.download_button(
-            label="📄 Download Top Results (PDF)",
-            data=pdf_data,
-            file_name="top_ranked_resumes.pdf",
-            mime="application/pdf"
-        )
+            # PDF download
+            pdf_data = generate_pdf(top_results)
+            st.download_button(
+                label="📄 Download Top Results (PDF)",
+                data=pdf_data,
+                file_name="top_ranked_resumes.pdf",
+                mime="application/pdf"
+            )
+        else:
+            st.warning("⚠️ No resumes found or no match results to show.")
