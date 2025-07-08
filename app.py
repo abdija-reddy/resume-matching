@@ -1,4 +1,3 @@
-
 import streamlit as st
 import fitz
 import docx2txt
@@ -7,29 +6,30 @@ import re
 import nltk
 import pandas as pd
 import io
+from fpdf import FPDF
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Download required resources
 nltk.download('stopwords')
 
-# Apply styling
+# Dark theme styling
 st.markdown("""
     <style>
         .stApp {
-            background-color: #f9f9f9;
+            background-color: #000000;
+            color: white;
             font-family: 'Segoe UI', sans-serif;
         }
         .stButton>button {
-            background-color: #4CAF50;
+            background-color: #1E1E1E;
             color: white;
+            border: 1px solid white;
             border-radius: 10px;
             padding: 10px 20px;
         }
+        .css-1cpxqw2, .css-h5rgaw { color: white !important; }
     </style>
 """, unsafe_allow_html=True)
-
-# --- Functions ---
 
 def extract_text(file):
     ext = os.path.splitext(file.name)[1].lower()
@@ -67,10 +67,21 @@ def match_resumes(jd_text, resumes):
     similarity_scores = cosine_similarity(jd_vector, resume_vectors).flatten()
     return similarity_scores
 
-# --- Streamlit App ---
+def generate_pdf(data):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt="Top Matched Resumes", ln=True, align='C')
+    pdf.ln(10)
+    for name, score in data:
+        pdf.cell(200, 10, txt=f"{name} — Score: {score:.2f}", ln=True)
+    buffer = io.BytesIO()
+    pdf.output(buffer)
+    return buffer.getvalue()
 
+# Streamlit App
 st.set_page_config(page_title="Resume Matcher", layout="centered")
-st.title("📄 Smart Resume Matcher")
+st.title("📄 Smart Resume Matcher (Dark Mode)")
 
 col1, col2 = st.columns(2)
 
@@ -97,18 +108,31 @@ if st.button("🔍 Match Resumes"):
             scores = match_resumes(jd_text, resume_texts)
             results = sorted(zip(resume_names, scores), key=lambda x: x[1], reverse=True)
 
-        st.subheader("🏆 Top Matching Resumes")
-        for name, score in results:
-            with st.expander(f"{name} — Match Score: {score:.2f}"):
-                st.write("Resume matches well with the job description based on keywords and qualifications.")
+        st.subheader("🎯 Top Matching Resumes")
 
-        # Create download button for CSV
-        df_results = pd.DataFrame(results, columns=["Candidate", "Match Score"])
+        top_n = st.slider("Select number of top candidates to show:", 1, len(results), min(5, len(results)))
+        top_results = results[:top_n]
+
+        for name, score in top_results:
+            with st.expander(f"{name} — Match Score: {score:.2f}"):
+                st.write("Resume matches well with the job description.")
+
+        # CSV download
+        df_results = pd.DataFrame(top_results, columns=["Candidate", "Match Score"])
         csv_buffer = io.StringIO()
         df_results.to_csv(csv_buffer, index=False)
         st.download_button(
-            label="📥 Download Ranked Results (CSV)",
+            label="📥 Download Top Results (CSV)",
             data=csv_buffer.getvalue(),
-            file_name="ranked_resumes.csv",
+            file_name="top_ranked_resumes.csv",
             mime="text/csv"
+        )
+
+        # PDF download
+        pdf_data = generate_pdf(top_results)
+        st.download_button(
+            label="📄 Download Top Results (PDF)",
+            data=pdf_data,
+            file_name="top_ranked_resumes.pdf",
+            mime="application/pdf"
         )
