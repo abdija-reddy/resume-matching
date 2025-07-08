@@ -1,6 +1,0 @@
-streamlit
-nltk
-scikit-learn
-PyMuPDF
-python-docx
-docx2txt
