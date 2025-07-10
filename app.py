@@ -5,6 +5,7 @@ import os
 import re
 import nltk
 import pandas as pd
+import base64
 from io import BytesIO
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -124,7 +125,12 @@ if st.sidebar.button("🔍 Match Resumes"):
 
         results = []
 
+        resume_bytes_dict = {r.name: r.read() for r in resume_files}  # Save file bytes before using
+
         for resume in resume_files:
+            resume_content = resume_bytes_dict[resume.name]
+            ext = os.path.splitext(resume.name)[1].lower()
+            resume.seek(0)
             resume_raw = extract_text(resume)
             resume_sections = extract_sections(resume_raw)
             resume_full_text = preprocess_text(resume_raw)
@@ -132,7 +138,6 @@ if st.sidebar.button("🔍 Match Resumes"):
             if selected_sections:
                 total_score, section_scores = match_sections(jd_sections, resume_sections, weights)
             else:
-                # fallback to full-text matching
                 vectorizer = TfidfVectorizer()
                 tfidf = vectorizer.fit_transform([jd_full_text, resume_full_text])
                 total_score = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
@@ -140,7 +145,9 @@ if st.sidebar.button("🔍 Match Resumes"):
 
             result = {
                 "Resume Name": resume.name,
-                "Total Match Score": round(total_score, 2)
+                "Total Match Score": round(total_score, 2),
+                "Bytes": resume_content,
+                "Extension": ext
             }
 
             for sec in selected_sections:
@@ -148,13 +155,28 @@ if st.sidebar.button("🔍 Match Resumes"):
 
             results.append(result)
 
+        # Sort by match score
         sorted_results = sorted(results, key=lambda x: x["Total Match Score"], reverse=True)
 
         st.subheader("🏆 Top Matching Resumes")
-        for res in sorted_results:
-            st.markdown(f"**{res['Resume Name']}** — Match Score: `{res['Total Match Score']}`")
 
-        excel_data = save_to_excel(sorted_results)
+        for res in sorted_results:
+            encoded = base64.b64encode(res["Bytes"]).decode()
+            ext = res["Extension"].replace('.', '')  # remove dot
+            href = f'<a href="data:application/{ext};base64,{encoded}" download="{res["Resume Name"]}" target="_blank">{res["Resume Name"]}</a>'
+
+            st.markdown(f"**{href}** — Match Score: `{res['Total Match Score']}`", unsafe_allow_html=True)
+
+            if selected_sections:
+                for sec in selected_sections:
+                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;- {sec.capitalize()} Score: `{res.get(f'{sec.capitalize()} Score', 0.0)}`")
+
+        # Prepare Excel file without the bytes/extension fields
+        excel_ready = [
+            {k: v for k, v in res.items() if k not in ("Bytes", "Extension")}
+            for res in sorted_results
+        ]
+        excel_data = save_to_excel(excel_ready)
         st.download_button(
             label="📥 Download Excel Report",
             data=excel_data,
