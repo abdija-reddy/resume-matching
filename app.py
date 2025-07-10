@@ -172,7 +172,7 @@ if st.sidebar.button("Match Resumes"):
         ]
         excel_data = save_to_excel(downloadable)
         st.download_button(
-            label="\ud83d\udcc5 Download Excel Report",
+            label="Download Excel Report",
             data=excel_data,
             file_name='resume_match_results.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
