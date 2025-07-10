@@ -9,8 +9,11 @@ import base64
 from io import BytesIO
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import altair as alt
+from nltk.stem import WordNetLemmatizer
 
 nltk.download('stopwords')
+nltk.download('wordnet')
 
 # ---------- TEXT PROCESSING HELPERS ----------
 
@@ -28,10 +31,12 @@ def extract_text(file):
         return ""
 
 def preprocess_text(text):
+    lemmatizer = WordNetLemmatizer()
     text = text.lower()
     text = re.sub(r'[^a-zA-Z\s]', '', text)
     tokens = text.split()
-    tokens = [word for word in tokens if word not in nltk.corpus.stopwords.words('english')]
+    stop_words = set(nltk.corpus.stopwords.words('english')) - {'not', 'no', 'nor'}
+    tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
     return ' '.join(tokens)
 
 def extract_sections(text):
@@ -41,7 +46,6 @@ def extract_sections(text):
         "education": "",
         "achievements": ""
     }
-
     text_lower = text.lower()
     idxs = {
         "skills": text_lower.find("skill"),
@@ -49,13 +53,11 @@ def extract_sections(text):
         "education": text_lower.find("education"),
         "achievements": text_lower.find("achievement")
     }
-
     sorted_idxs = sorted([(i, s) for s, i in idxs.items() if i != -1])
     for i in range(len(sorted_idxs)):
         start_idx, sec = sorted_idxs[i]
         end_idx = sorted_idxs[i + 1][0] if i + 1 < len(sorted_idxs) else len(text)
         sections[sec] = preprocess_text(text[start_idx:end_idx])
-
     return sections
 
 # ---------- MATCHING LOGIC ----------
@@ -63,21 +65,17 @@ def extract_sections(text):
 def match_sections(jd_sections, resume_sections, weights):
     total_score = 0.0
     section_scores = {}
-
     for section in weights:
         jd_text = jd_sections.get(section, "")
         resume_text = resume_sections.get(section, "")
-
         if jd_text.strip() == "" or resume_text.strip() == "":
             score = 0
         else:
             vectorizer = TfidfVectorizer()
             tfidf = vectorizer.fit_transform([jd_text, resume_text])
             score = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
-
         section_scores[section] = score
         total_score += weights[section] * score
-
     return total_score, section_scores
 
 # ---------- EXCEL EXPORT ----------
@@ -92,45 +90,40 @@ def save_to_excel(results):
 # ---------- STREAMLIT APP ----------
 
 st.set_page_config(page_title="Resume Matcher", layout="centered")
-st.title("📄 Automated Resume Matcher with Section Selection")
+st.title("\ud83d\udcc4 Enhanced Resume Matcher")
 
 st.sidebar.header("Upload Files")
 jd_file = st.sidebar.file_uploader("Upload Job Description (PDF/DOCX)", type=['pdf', 'docx'])
 resume_files = st.sidebar.file_uploader("Upload Resumes (PDF/DOCX)", type=['pdf', 'docx'], accept_multiple_files=True)
 
-# Section selection
 aspects = st.sidebar.multiselect(
-    "🔍 Choose Resume Sections to Match",
+    "\ud83d\udd0d Choose Resume Sections to Match",
     ["Skills", "Experience", "Education", "Achievements"],
     default=["Skills", "Experience", "Education"]
 )
-
 aspect_map = {
     "Skills": "skills",
     "Experience": "experience",
     "Education": "education",
     "Achievements": "achievements"
 }
-
 selected_sections = [aspect_map[a] for a in aspects]
 weights = {sec: 1 / len(selected_sections) for sec in selected_sections} if selected_sections else {}
 
-if st.sidebar.button("🔍 Match Resumes"):
+if st.sidebar.button("\ud83d\udd0d Match Resumes"):
     if not jd_file or not resume_files:
         st.warning("Please upload both job description and at least one resume.")
     else:
         jd_raw = extract_text(jd_file)
         jd_sections = extract_sections(jd_raw)
         jd_full_text = preprocess_text(jd_raw)
-
         results = []
-
-        resume_bytes_dict = {r.name: r.read() for r in resume_files}  # Save file bytes before using
+        resume_bytes_dict = {r.name: r.read() for r in resume_files}
 
         for resume in resume_files:
-            resume_content = resume_bytes_dict[resume.name]
-            ext = os.path.splitext(resume.name)[1].lower()
+            file_bytes = resume_bytes_dict[resume.name]
             resume.seek(0)
+            ext = os.path.splitext(resume.name)[1].lower()[1:]
             resume_raw = extract_text(resume)
             resume_sections = extract_sections(resume_raw)
             resume_full_text = preprocess_text(resume_raw)
@@ -143,43 +136,47 @@ if st.sidebar.button("🔍 Match Resumes"):
                 total_score = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
                 section_scores = {}
 
-            result = {
-                "Resume Name": resume.name,
-                "Total Match Score": round(total_score, 2),
-                "Bytes": resume_content,
-                "Extension": ext
-            }
+            encoded = base64.b64encode(file_bytes).decode()
+            href = f'<a href="data:application/{ext};base64,{encoded}" download="{resume.name}" target="_blank">{resume.name}</a>'
 
+            result = {
+                "Resume": href,
+                "Total Match Score": round(total_score, 2)
+            }
             for sec in selected_sections:
                 result[f"{sec.capitalize()} Score"] = round(section_scores.get(sec, 0.0), 2)
 
             results.append(result)
 
-        # Sort by match score
         sorted_results = sorted(results, key=lambda x: x["Total Match Score"], reverse=True)
 
-        st.subheader("🏆 Top Matching Resumes")
+        st.subheader("\ud83d\udccb Match Results Table")
+        styled_table = pd.DataFrame(sorted_results)
+        st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
 
-        for res in sorted_results:
-            encoded = base64.b64encode(res["Bytes"]).decode()
-            ext = res["Extension"].replace('.', '')  # remove dot
-            href = f'<a href="data:application/{ext};base64,{encoded}" download="{res["Resume Name"]}" target="_blank">{res["Resume Name"]}</a>'
+        st.subheader("\ud83d\udcca Visual Match Comparison")
+        chart_data = pd.DataFrame([
+            {"Resume Name": re.sub('<.*?>', '', r["Resume"]), "Score": r["Total Match Score"]}
+            for r in sorted_results
+        ])
+        chart = alt.Chart(chart_data).mark_bar().encode(
+            x="Score:Q",
+            y=alt.Y("Resume Name:N", sort='-x'),
+            tooltip=["Resume Name", "Score"]
+        ).properties(height=400)
+        st.altair_chart(chart, use_container_width=True)
 
-            st.markdown(f"**{href}** — Match Score: `{res['Total Match Score']}`", unsafe_allow_html=True)
-
-            if selected_sections:
-                for sec in selected_sections:
-                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;- {sec.capitalize()} Score: `{res.get(f'{sec.capitalize()} Score', 0.0)}`")
-
-        # Prepare Excel file without the bytes/extension fields
-        excel_ready = [
-            {k: v for k, v in res.items() if k not in ("Bytes", "Extension")}
-            for res in sorted_results
+        downloadable = [
+            {k: re.sub('<.*?>', '', v) if k == "Resume" else v for k, v in r.items()}
+            for r in sorted_results
         ]
-        excel_data = save_to_excel(excel_ready)
+        excel_data = save_to_excel(downloadable)
         st.download_button(
-            label="📥 Download Excel Report",
+            label="\ud83d\udcc5 Download Excel Report",
             data=excel_data,
             file_name='resume_match_results.xlsx',
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
+
+        st.markdown(f"\n**Highest Score:** `{max([r['Total Match Score'] for r in results]):.2f}`")
+        st.markdown(f"**Average Score:** `{sum([r['Total Match Score'] for r in results])/len(results):.2f}`")
