@@ -46,14 +46,22 @@ def extract_sections(text):
         "skills": "",
         "experience": "",
         "education": "",
-        "achievements": ""
+        "achievements": "",
+        "projects": "",
+        "certifications": "",
+        "objective": "",
+        "interests": ""
     }
     text_lower = text.lower()
     idxs = {
         "skills": text_lower.find("skill"),
         "experience": text_lower.find("experience"),
         "education": text_lower.find("education"),
-        "achievements": text_lower.find("achievement")
+        "achievements": text_lower.find("achievement"),
+        "projects": text_lower.find("project"),
+        "certifications": text_lower.find("certification"),
+        "objective": text_lower.find("objective"),
+        "interests": text_lower.find("interest")
     }
     sorted_idxs = sorted([(i, s) for s, i in idxs.items() if i != -1])
     for i in range(len(sorted_idxs)):
@@ -113,14 +121,20 @@ with tab1:
 
     aspects = st.multiselect(
         "Choose Resume Sections to Match",
-        ["Skills", "Experience", "Education", "Achievements"],
+        ["Skills", "Experience", "Education", "Achievements", "Projects", "Certifications", "Objective", "Interests"],
         default=["Skills", "Experience", "Education"]
     )
+    min_score = st.number_input("Set Minimum Qualification Score (%)", min_value=0, max_value=100, value=50, step=1)
+
     aspect_map = {
         "Skills": "skills",
         "Experience": "experience",
         "Education": "education",
-        "Achievements": "achievements"
+        "Achievements": "achievements",
+        "Projects": "projects",
+        "Certifications": "certifications",
+        "Objective": "objective",
+        "Interests": "interests"
     }
     selected_sections = [aspect_map[a] for a in aspects]
     weights = {sec: 1 / len(selected_sections) for sec in selected_sections} if selected_sections else {}
@@ -154,40 +168,42 @@ with tab1:
                 encoded = base64.b64encode(file_bytes).decode()
                 href = f'<a href="data:application/{ext};base64,{encoded}" download="{resume.name}" target="_blank">{resume.name}</a>'
 
-                result = {
-                    "Resume": href,
-                    "Total Match Score": round(total_score, 2)
-                }
+                result = {"Resume": href}
+                if len(selected_sections) > 1:
+                    result["Total Match Score (%)"] = round(total_score * 100, 2)
                 for sec in selected_sections:
-                    result[f"{sec.capitalize()} Score"] = round(section_scores.get(sec, 0.0), 2)
+                    result[f"{sec.capitalize()} Score (%)"] = round(section_scores.get(sec, 0.0) * 100, 2)
 
                 results.append(result)
 
-            sorted_results = sorted(results, key=lambda x: x["Total Match Score"], reverse=True)
+            sort_key = "Total Match Score (%)" if len(selected_sections) > 1 else f"{selected_sections[0].capitalize()} Score (%)"
+            sorted_results = sorted(results, key=lambda x: x.get(sort_key, 0), reverse=True)
             st.session_state["results"] = sorted_results
+            st.session_state["qualified"] = [r for r in sorted_results if r.get("Total Match Score (%)", list(r.values())[-1]) >= min_score]
             st.success("Matching complete! View results in the Match Report tab.")
 
 with tab2:
     if "results" in st.session_state:
         sorted_results = st.session_state["results"]
+        qualified_results = st.session_state.get("qualified", sorted_results)
         st.subheader("Top Matching Resumes")
         styled_table = pd.DataFrame(sorted_results)
         st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
 
         chart_data = pd.DataFrame([
-            {"Resume Name": re.sub('<.*?>', '', r["Resume"]), "Score": r["Total Match Score"]}
+            {"Resume Name": re.sub('<.*?>', '', r["Resume"]), "Score (%)": r.get("Total Match Score (%)", list(r.values())[-1])}
             for r in sorted_results
         ])
         chart = alt.Chart(chart_data).mark_bar().encode(
-            x="Score:Q",
+            x="Score (%):Q",
             y=alt.Y("Resume Name:N", sort='-x'),
-            tooltip=["Resume Name", "Score"]
+            tooltip=["Resume Name", "Score (%)"]
         ).properties(height=400)
         st.altair_chart(chart, use_container_width=True)
 
         downloadable = [
             {k: re.sub('<.*?>', '', v) if k == "Resume" else v for k, v in r.items()}
-            for r in sorted_results
+            for r in qualified_results
         ]
         excel_data = save_to_excel(downloadable)
         st.download_button(
@@ -197,11 +213,11 @@ with tab2:
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
-        st.markdown(f"**Highest Score:** `{max([r['Total Match Score'] for r in sorted_results]):.2f}`")
-        st.markdown(f"**Average Score:** `{sum([r['Total Match Score'] for r in sorted_results])/len(sorted_results):.2f}`")
+        if len(selected_sections) > 1:
+            st.markdown(f"**Highest Score:** `{max([r['Total Match Score (%)'] for r in sorted_results]):.2f}%`")
+            st.markdown(f"**Average Score:** `{sum([r['Total Match Score (%)'] for r in sorted_results])/len(sorted_results):.2f}%`")
 
 st.markdown("""
 ---
 <p style='text-align: center;'>Made by CodeSquad</p>
 """, unsafe_allow_html=True)
-
