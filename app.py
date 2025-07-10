@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import streamlit as st
 import fitz  # PyMuPDF
 import docx2txt
@@ -89,72 +91,89 @@ def save_to_excel(results):
 
 # ---------- STREAMLIT APP ----------
 
-st.set_page_config(page_title="Resume Matcher", layout="centered")
-st.title("Enhanced Resume Matcher") 
+st.set_page_config(page_title="Enhanced Resume Matcher", layout="wide")
+st.markdown("""
+    <style>
+        .main { background-color: #0e1117; color: white; }
+        .block-container { padding-top: 2rem; }
+    </style>
+""", unsafe_allow_html=True)
 
-st.sidebar.header("Upload Files")
-jd_file = st.sidebar.file_uploader("Upload Job Description (PDF/DOCX)", type=['pdf', 'docx'])
-resume_files = st.sidebar.file_uploader("Upload Resumes (PDF/DOCX)", type=['pdf', 'docx'], accept_multiple_files=True)
+st.markdown("<h1 style='text-align: center;'>Enhanced Resume Matcher</h1>", unsafe_allow_html=True)
 
-aspects = st.sidebar.multiselect(
-    "Choose Resume Sections to Match",
-    ["Skills", "Experience", "Education", "Achievements"],
-    default=["Skills", "Experience", "Education"]
-)
-aspect_map = {
-    "Skills": "skills",
-    "Experience": "experience",
-    "Education": "education",
-    "Achievements": "achievements"
-}
-selected_sections = [aspect_map[a] for a in aspects]
-weights = {sec: 1 / len(selected_sections) for sec in selected_sections} if selected_sections else {}
+tab1, tab2 = st.tabs(["Resume Matcher", "Match Report"])
 
-if st.sidebar.button("Match Resumes"):
-    if not jd_file or not resume_files:
-        st.warning("Please upload both job description and at least one resume.")
-    else:
-        jd_raw = extract_text(jd_file)
-        jd_sections = extract_sections(jd_raw)
-        jd_full_text = preprocess_text(jd_raw)
-        results = []
-        resume_bytes_dict = {r.name: r.read() for r in resume_files}
+with tab1:
+    with st.container():
+        col1, col2 = st.columns(2)
+        with col1:
+            jd_file = st.file_uploader("Upload Job Description (PDF/DOCX)", type=['pdf', 'docx'])
+        with col2:
+            resume_files = st.file_uploader("Upload Resumes (PDF/DOCX)", type=['pdf', 'docx'], accept_multiple_files=True)
 
-        for resume in resume_files:
-            file_bytes = resume_bytes_dict[resume.name]
-            resume.seek(0)
-            ext = os.path.splitext(resume.name)[1].lower()[1:]
-            resume_raw = extract_text(resume)
-            resume_sections = extract_sections(resume_raw)
-            resume_full_text = preprocess_text(resume_raw)
+    aspects = st.multiselect(
+        "Choose Resume Sections to Match",
+        ["Skills", "Experience", "Education", "Achievements"],
+        default=["Skills", "Experience", "Education"]
+    )
+    aspect_map = {
+        "Skills": "skills",
+        "Experience": "experience",
+        "Education": "education",
+        "Achievements": "achievements"
+    }
+    selected_sections = [aspect_map[a] for a in aspects]
+    weights = {sec: 1 / len(selected_sections) for sec in selected_sections} if selected_sections else {}
 
-            if selected_sections:
-                total_score, section_scores = match_sections(jd_sections, resume_sections, weights)
-            else:
-                vectorizer = TfidfVectorizer()
-                tfidf = vectorizer.fit_transform([jd_full_text, resume_full_text])
-                total_score = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
-                section_scores = {}
+    if st.button("Start Matching"):
+        if not jd_file or not resume_files:
+            st.warning("Please upload both job description and at least one resume.")
+        else:
+            jd_raw = extract_text(jd_file)
+            jd_sections = extract_sections(jd_raw)
+            jd_full_text = preprocess_text(jd_raw)
+            results = []
+            resume_bytes_dict = {r.name: r.read() for r in resume_files}
 
-            encoded = base64.b64encode(file_bytes).decode()
-            href = f'<a href="data:application/{ext};base64,{encoded}" download="{resume.name}" target="_blank">{resume.name}</a>'
+            for resume in resume_files:
+                file_bytes = resume_bytes_dict[resume.name]
+                resume.seek(0)
+                ext = os.path.splitext(resume.name)[1].lower()[1:]
+                resume_raw = extract_text(resume)
+                resume_sections = extract_sections(resume_raw)
+                resume_full_text = preprocess_text(resume_raw)
 
-            result = {
-                "Resume": href,
-                "Total Match Score": round(total_score, 2)
-            }
-            for sec in selected_sections:
-                result[f"{sec.capitalize()} Score"] = round(section_scores.get(sec, 0.0), 2)
+                if selected_sections:
+                    total_score, section_scores = match_sections(jd_sections, resume_sections, weights)
+                else:
+                    vectorizer = TfidfVectorizer()
+                    tfidf = vectorizer.fit_transform([jd_full_text, resume_full_text])
+                    total_score = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
+                    section_scores = {}
 
-            results.append(result)
+                encoded = base64.b64encode(file_bytes).decode()
+                href = f'<a href="data:application/{ext};base64,{encoded}" download="{resume.name}" target="_blank">{resume.name}</a>'
 
-        sorted_results = sorted(results, key=lambda x: x["Total Match Score"], reverse=True)
+                result = {
+                    "Resume": href,
+                    "Total Match Score": round(total_score, 2)
+                }
+                for sec in selected_sections:
+                    result[f"{sec.capitalize()} Score"] = round(section_scores.get(sec, 0.0), 2)
 
-        st.subheader("Match Results Table")
+                results.append(result)
+
+            sorted_results = sorted(results, key=lambda x: x["Total Match Score"], reverse=True)
+            st.session_state["results"] = sorted_results
+            st.success("Matching complete! View results in the Match Report tab.")
+
+with tab2:
+    if "results" in st.session_state:
+        sorted_results = st.session_state["results"]
+        st.subheader("Top Matching Resumes")
         styled_table = pd.DataFrame(sorted_results)
         st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
 
-        st.subheader("Visual Match Comparison")
         chart_data = pd.DataFrame([
             {"Resume Name": re.sub('<.*?>', '', r["Resume"]), "Score": r["Total Match Score"]}
             for r in sorted_results
@@ -178,5 +197,11 @@ if st.sidebar.button("Match Resumes"):
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
-        st.markdown(f"\n**Highest Score:** `{max([r['Total Match Score'] for r in results]):.2f}`")
-        st.markdown(f"**Average Score:** `{sum([r['Total Match Score'] for r in results])/len(results):.2f}`")
+        st.markdown(f"**Highest Score:** `{max([r['Total Match Score'] for r in sorted_results]):.2f}`")
+        st.markdown(f"**Average Score:** `{sum([r['Total Match Score'] for r in sorted_results])/len(sorted_results):.2f}`")
+
+st.markdown("""
+---
+<p style='text-align: center;'>Made by CodeSquad</p>
+""", unsafe_allow_html=True)
+
