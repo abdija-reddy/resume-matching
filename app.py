@@ -112,35 +112,39 @@ aspect_map = {
 }
 
 selected_sections = [aspect_map[a] for a in aspects]
-
-# Create weights dynamically
-if selected_sections:
-    weights = {sec: 1 / len(selected_sections) for sec in selected_sections}
-else:
-    weights = {}
+weights = {sec: 1 / len(selected_sections) for sec in selected_sections} if selected_sections else {}
 
 if st.sidebar.button("🔍 Match Resumes"):
     if not jd_file or not resume_files:
         st.warning("Please upload both job description and at least one resume.")
-    elif not selected_sections:
-        st.warning("Please select at least one section to match.")
     else:
         jd_raw = extract_text(jd_file)
         jd_sections = extract_sections(jd_raw)
+        jd_full_text = preprocess_text(jd_raw)
 
         results = []
 
         for resume in resume_files:
             resume_raw = extract_text(resume)
             resume_sections = extract_sections(resume_raw)
-            total_score, section_scores = match_sections(jd_sections, resume_sections, weights)
+            resume_full_text = preprocess_text(resume_raw)
+
+            if selected_sections:
+                total_score, section_scores = match_sections(jd_sections, resume_sections, weights)
+            else:
+                # fallback to full-text matching
+                vectorizer = TfidfVectorizer()
+                tfidf = vectorizer.fit_transform([jd_full_text, resume_full_text])
+                total_score = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
+                section_scores = {}
 
             result = {
                 "Resume Name": resume.name,
                 "Total Match Score": round(total_score, 2)
             }
+
             for sec in selected_sections:
-                result[f"{sec.capitalize()} Score"] = round(section_scores[sec], 2)
+                result[f"{sec.capitalize()} Score"] = round(section_scores.get(sec, 0.0), 2)
 
             results.append(result)
 
