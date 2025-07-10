@@ -110,7 +110,7 @@ aspect_map = {
 selected_sections = [aspect_map[a] for a in aspects]
 weights = {sec: 1 / len(selected_sections) for sec in selected_sections} if selected_sections else {}
 
-if st.sidebar.button("\ud83d\udd0d Match Resumes"):
+if st.sidebar.button("Match Resumes"):
     if not jd_file or not resume_files:
         st.warning("Please upload both job description and at least one resume.")
     else:
@@ -150,11 +150,11 @@ if st.sidebar.button("\ud83d\udd0d Match Resumes"):
 
         sorted_results = sorted(results, key=lambda x: x["Total Match Score"], reverse=True)
 
-        st.subheader("\ud83d\udccb Match Results Table")
+        st.subheader("Match Results Table")
         styled_table = pd.DataFrame(sorted_results)
         st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
 
-        st.subheader("\ud83d\udcca Visual Match Comparison")
+        st.subheader("Visual Match Comparison")
         chart_data = pd.DataFrame([
             {"Resume Name": re.sub('<.*?>', '', r["Resume"]), "Score": r["Total Match Score"]}
             for r in sorted_results
