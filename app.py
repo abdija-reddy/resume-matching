@@ -4,13 +4,12 @@ import docx2txt
 import os
 import re
 import nltk
+import pandas as pd
+from io import BytesIO
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Set custom NLTK data path (still needed for stopwords)
 nltk.download('stopwords')
-
-# --- Functions from backend ---
 
 def extract_text(file):
     ext = os.path.splitext(file.name)[1].lower()
@@ -41,12 +40,19 @@ def match_resumes(jd_text, resumes):
     similarity_scores = cosine_similarity(jd_vector, resume_vectors).flatten()
     return similarity_scores
 
-# --- Streamlit App ---
+def save_to_excel(results):
+    df = pd.DataFrame(results, columns=['Resume Name', 'Match Score'])
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Match Results')
+    processed_data = output.getvalue()
+    return processed_data
+
+# --- Streamlit UI ---
 st.set_page_config(page_title="Resume Matcher", layout="centered")
 st.title("📄 Automated Resume Matcher")
 
 st.sidebar.header("Upload Files")
-
 jd_file = st.sidebar.file_uploader("Upload Job Description (PDF/DOCX)", type=['pdf', 'docx'])
 resume_files = st.sidebar.file_uploader("Upload Resumes (PDF/DOCX)", type=['pdf', 'docx'], accept_multiple_files=True)
 
@@ -70,3 +76,11 @@ if st.sidebar.button("🔍 Match Resumes"):
         for name, score in results:
             st.markdown(f"**{name}** — Match Score: `{score:.2f}`")
 
+        # Save to Excel
+        excel_data = save_to_excel(results)
+        st.download_button(
+            label="📥 Download Results as Excel",
+            data=excel_data,
+            file_name='resume_match_results.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
