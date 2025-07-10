@@ -97,7 +97,7 @@ jd_file = st.sidebar.file_uploader("Upload Job Description (PDF/DOCX)", type=['p
 resume_files = st.sidebar.file_uploader("Upload Resumes (PDF/DOCX)", type=['pdf', 'docx'], accept_multiple_files=True)
 
 aspects = st.sidebar.multiselect(
-    "\ud83d\udd0d Choose Resume Sections to Match",
+    "Choose Resume Sections to Match",
     ["Skills", "Experience", "Education", "Achievements"],
     default=["Skills", "Experience", "Education"]
 )
