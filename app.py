@@ -197,7 +197,10 @@ with tab1:
 
                 results.append(result)
 
-            sort_key = "Total Match Score (%)" if len(selected_sections) > 1 else (f"{selected_sections[0].capitalize()} Score (%)" if selected_sections else "")
+            if selected_sections:
+                sort_key = "Total Match Score (%)" if len(selected_sections) > 1 else f"{selected_sections[0].capitalize()} Score (%)"
+            else:
+                sort_key = "Score (%)"
             sorted_results = sorted(results, key=lambda x: x.get(sort_key, list(x.values())[-1]), reverse=True)
             st.session_state["results"] = sorted_results
             st.session_state["qualified"] = [r for r in sorted_results if r.get("Total Match Score (%)", list(r.values())[-1]) >= min_score]
