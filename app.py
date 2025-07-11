@@ -181,11 +181,8 @@ with tab1:
                     result[f"{sec.capitalize()} Score (%)"] = round(section_scores.get(sec, 0.0) * 100, 2)
 
                 results.append(result)
-                if not selected_sections:
-                    st.error("Please select at least one resume section to match.")
-                    st.stop()
-                else:
-                    sort_key = "Total Match Score (%)" if len(selected_sections) > 1 else f"{selected_sections[0].capitalize()} Score (%)"
+
+            sort_key = "Total Match Score (%)" if len(selected_sections) > 1 else f"{selected_sections[0].capitalize()} Score (%)"
             sorted_results = sorted(results, key=lambda x: x.get(sort_key, 0), reverse=True)
             st.session_state["results"] = sorted_results
             if min_score is not None:
@@ -233,4 +230,3 @@ st.markdown("""
 ---
 <p style='text-align: center;'>Made by CodeSquad</p>
 """, unsafe_allow_html=True)
-
