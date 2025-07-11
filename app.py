@@ -119,7 +119,7 @@ def save_to_excel(results):
 
 # ---------- STREAMLIT APP ----------
 
-st.set_page_config(page_title="Enhanced Resume Matcher", layout="wide")
+st.set_page_config(page_title="Resume Matcher", layout="wide")
 st.markdown("""
     <style>
         .main { background-color: #0e1117; color: white; }
@@ -127,7 +127,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<h1 style='text-align: center;'>Enhanced Resume Matcher</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>Resume Matcher</h1>", unsafe_allow_html=True)
 
 tab1, tab2 = st.tabs(["Resume Matcher", "Match Report"])
 
