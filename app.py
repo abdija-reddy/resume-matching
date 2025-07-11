@@ -144,6 +144,14 @@ with tab1:
 
     analyze_edu = st.checkbox("Analyze Education Categories (Not Based on JD)")
 
+    edu_filter = []
+    if analyze_edu:
+        edu_filter = st.multiselect(
+            "Filter Resumes by Education Category",
+            options=["School", "Intermediate/Diploma", "Undergraduate", "Postgraduate", "Unclassified"],
+            default=["School", "Intermediate/Diploma", "Undergraduate", "Postgraduate", "Unclassified"]
+        )
+
     aspect_map = {
         "Skills": "skills",
         "Experience": "experience",
@@ -206,7 +214,12 @@ with tab1:
                 sort_key = "Total Match Score (%)" if len(selected_sections) > 1 else f"{selected_sections[0].capitalize()} Score (%)"
             else:
                 sort_key = "Score (%)"
+
             sorted_results = sorted(results, key=lambda x: x.get(sort_key, list(x.values())[-1]), reverse=True)
+
+            if analyze_edu and edu_filter:
+                sorted_results = [r for r in sorted_results if r.get("Education Category", "Unclassified") in edu_filter]
+
             st.session_state["results"] = sorted_results
             st.session_state["qualified"] = [r for r in sorted_results if r.get("Total Match Score (%)", list(r.values())[-1]) >= min_score]
 
@@ -216,6 +229,7 @@ with tab1:
                 edu_df = pd.DataFrame.from_dict(counts, orient='index', columns=['Count']).reset_index()
                 edu_df.columns = ['Category', 'Count']
                 st.bar_chart(edu_df.set_index('Category'))
+                st.write("Total resumes analyzed:", sum(counts.values()))
 
             st.success("Matching complete! View results in the Match Report tab.")
 
@@ -258,4 +272,3 @@ st.markdown("""
 ---
 <p style='text-align: center;'>Made by CodeSquad</p>
 """, unsafe_allow_html=True)
-
