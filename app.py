@@ -137,8 +137,7 @@ with tab1:
 
     aspects = st.multiselect(
         "Choose Resume Sections to Match",
-        ["Skills", "Experience", "Education", "Achievements", "Projects", "Certifications", "Objective", "Interests"],
-        default=["Skills", "Experience", "Education"]
+        ["Skills", "Experience", "Education", "Achievements", "Projects", "Certifications", "Objective", "Interests"]
     )
     min_score = st.number_input("Set Minimum Qualification Score (%) (optional)", min_value=0, max_value=100, value=0, step=1)
 
@@ -189,8 +188,10 @@ with tab1:
                 result = {"Resume": href}
                 if len(selected_sections) > 1:
                     result["Total Match Score (%)"] = round(total_score * 100, 2)
-                for sec in selected_sections:
-                    result[f"{sec.capitalize()} Score (%)"] = round(section_scores.get(sec, 0.0) * 100, 2)
+                elif len(selected_sections) == 1:
+                    result[f"{selected_sections[0].capitalize()} Score (%)"] = round(total_score * 100, 2)
+                else:
+                    result["Score (%)"] = round(total_score * 100, 2)
 
                 if analyze_edu:
                     result["Education Category"] = classify_education_section(resume_sections.get("education", ""))
@@ -203,7 +204,7 @@ with tab1:
                 sort_key = "Score (%)"
             sorted_results = sorted(results, key=lambda x: x.get(sort_key, list(x.values())[-1]), reverse=True)
             st.session_state["results"] = sorted_results
-            st.session_state["qualified"] = [r for r in sorted_results if r.get("Total Match Score (%)", list(r.values())[-1]) >= min_score]
+            st.session_state["qualified"] = [r for r in sorted_results if r.get("Total Match Score (%)", r.get("Score (%)", 0)) >= min_score]
             st.success("Matching complete! View results in the Match Report tab.")
 
 with tab2:
@@ -215,7 +216,7 @@ with tab2:
         st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
 
         chart_data = pd.DataFrame([
-            {"Resume Name": re.sub('<.*?>', '', r["Resume"]), "Score (%)": r.get("Total Match Score (%)", list(r.values())[-1])}
+            {"Resume Name": re.sub('<.*?>', '', r["Resume"]), "Score (%)": r.get("Total Match Score (%)", r.get("Score (%)", 0))}
             for r in sorted_results
         ])
         chart = alt.Chart(chart_data).mark_bar().encode(
