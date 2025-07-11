@@ -13,6 +13,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import altair as alt
 from nltk.stem import WordNetLemmatizer
+from collections import Counter
 
 nltk.download('stopwords')
 nltk.download('wordnet')
@@ -164,6 +165,7 @@ with tab1:
             jd_sections = extract_sections(jd_raw)
             jd_full_text = preprocess_text(jd_raw)
             results = []
+            education_categories = []
             resume_bytes_dict = {r.name: r.read() for r in resume_files}
 
             for resume in resume_files:
@@ -194,7 +196,9 @@ with tab1:
                     result["Score (%)"] = round(total_score * 100, 2)
 
                 if analyze_edu:
-                    result["Education Category"] = classify_education_section(resume_sections.get("education", ""))
+                    edu_cat = classify_education_section(resume_sections.get("education", ""))
+                    result["Education Category"] = edu_cat
+                    education_categories.append(edu_cat)
 
                 results.append(result)
 
@@ -204,7 +208,15 @@ with tab1:
                 sort_key = "Score (%)"
             sorted_results = sorted(results, key=lambda x: x.get(sort_key, list(x.values())[-1]), reverse=True)
             st.session_state["results"] = sorted_results
-            st.session_state["qualified"] = [r for r in sorted_results if r.get("Total Match Score (%)", r.get("Score (%)", 0)) >= min_score]
+            st.session_state["qualified"] = [r for r in sorted_results if r.get("Total Match Score (%)", list(r.values())[-1]) >= min_score]
+
+            if analyze_edu and education_categories:
+                st.subheader("Education Category Distribution")
+                counts = Counter(education_categories)
+                edu_df = pd.DataFrame.from_dict(counts, orient='index', columns=['Count']).reset_index()
+                edu_df.columns = ['Category', 'Count']
+                st.bar_chart(edu_df.set_index('Category'))
+
             st.success("Matching complete! View results in the Match Report tab.")
 
 with tab2:
@@ -216,7 +228,7 @@ with tab2:
         st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
 
         chart_data = pd.DataFrame([
-            {"Resume Name": re.sub('<.*?>', '', r["Resume"]), "Score (%)": r.get("Total Match Score (%)", r.get("Score (%)", 0))}
+            {"Resume Name": re.sub('<.*?>', '', r["Resume"]), "Score (%)": r.get("Total Match Score (%)", list(r.values())[-1])}
             for r in sorted_results
         ])
         chart = alt.Chart(chart_data).mark_bar().encode(
@@ -246,3 +258,4 @@ st.markdown("""
 ---
 <p style='text-align: center;'>Made by CodeSquad</p>
 """, unsafe_allow_html=True)
+
