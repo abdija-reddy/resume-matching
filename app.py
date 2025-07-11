@@ -70,6 +70,22 @@ def extract_sections(text):
         sections[sec] = preprocess_text(text[start_idx:end_idx])
     return sections
 
+# ---------- EDUCATION CLASSIFICATION ----------
+
+def classify_education_section(text):
+    categories = {
+        "School": ["ssc", "cbse", "icse", "matriculation", "secondary"],
+        "Intermediate/Diploma": ["intermediate", "diploma", "junior college"],
+        "Undergraduate": ["btech", "b.e", "bachelor", "undergraduate"],
+        "Postgraduate": ["mtech", "m.e", "master", "postgraduate"]
+    }
+    text = text.lower()
+    classification = set()
+    for category, keywords in categories.items():
+        if any(keyword in text for keyword in keywords):
+            classification.add(category)
+    return ", ".join(classification) if classification else "Unclassified"
+
 # ---------- MATCHING LOGIC ----------
 
 def match_sections(jd_sections, resume_sections, weights):
@@ -99,7 +115,7 @@ def save_to_excel(results):
 
 # ---------- STREAMLIT APP ----------
 
-st.set_page_config(page_title="Resume Matcher", layout="wide")
+st.set_page_config(page_title="Enhanced Resume Matcher", layout="wide")
 st.markdown("""
     <style>
         .main { background-color: #0e1117; color: white; }
@@ -107,7 +123,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<h1 style='text-align: center;'>Resume Matcher</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>Enhanced Resume Matcher</h1>", unsafe_allow_html=True)
 
 tab1, tab2 = st.tabs(["Resume Matcher", "Match Report"])
 
@@ -125,6 +141,8 @@ with tab1:
         default=["Skills", "Experience", "Education"]
     )
     min_score = st.number_input("Set Minimum Qualification Score (%) (optional)", min_value=0, max_value=100, value=0, step=1)
+
+    analyze_edu = st.checkbox("Analyze Education Categories (Not Based on JD)")
 
     aspect_map = {
         "Skills": "skills",
@@ -169,18 +187,17 @@ with tab1:
                 href = f'<a href="data:application/{ext};base64,{encoded}" download="{resume.name}" target="_blank">{resume.name}</a>'
 
                 result = {"Resume": href}
-                if len(selected_sections) > 1 or not selected_sections:
+                if len(selected_sections) > 1:
                     result["Total Match Score (%)"] = round(total_score * 100, 2)
                 for sec in selected_sections:
                     result[f"{sec.capitalize()} Score (%)"] = round(section_scores.get(sec, 0.0) * 100, 2)
 
+                if analyze_edu:
+                    result["Education Category"] = classify_education_section(resume_sections.get("education", ""))
+
                 results.append(result)
 
-            if len(selected_sections) > 1 or not selected_sections:
-                sort_key = "Total Match Score (%)"
-            elif len(selected_sections) == 1:
-                sort_key = f"{selected_sections[0].capitalize()} Score (%)"
-
+            sort_key = "Total Match Score (%)" if len(selected_sections) > 1 else (f"{selected_sections[0].capitalize()} Score (%)" if selected_sections else "")
             sorted_results = sorted(results, key=lambda x: x.get(sort_key, list(x.values())[-1]), reverse=True)
             st.session_state["results"] = sorted_results
             st.session_state["qualified"] = [r for r in sorted_results if r.get("Total Match Score (%)", list(r.values())[-1]) >= min_score]
@@ -217,7 +234,7 @@ with tab2:
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
-        if len(selected_sections) > 1 or not selected_sections:
+        if len(selected_sections) > 1:
             st.markdown(f"**Highest Score:** `{max([r['Total Match Score (%)'] for r in sorted_results]):.2f}%`")
             st.markdown(f"**Average Score:** `{sum([r['Total Match Score (%)'] for r in sorted_results])/len(sorted_results):.2f}%`")
 
