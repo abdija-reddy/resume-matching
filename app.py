@@ -120,17 +120,11 @@ with tab1:
             resume_files = st.file_uploader("Upload Resumes (PDF/DOCX)", type=['pdf', 'docx'], accept_multiple_files=True)
 
     aspects = st.multiselect(
-        "Choose Resume Sections to Match (optional)",
+        "Choose Resume Sections to Match",
         ["Skills", "Experience", "Education", "Achievements", "Projects", "Certifications", "Objective", "Interests"],
-        default=[]
+        default=["Skills", "Experience", "Education"]
     )
-
-    min_score_input = st.text_input("Set Minimum Qualification Score (%) (optional)")
-    try:
-        min_score = float(min_score_input) if min_score_input.strip() else None
-    except ValueError:
-        st.warning("Minimum qualification score must be a number.")
-        min_score = None
+    min_score = st.number_input("Set Minimum Qualification Score (%) (optional)", min_value=0, max_value=100, value=0, step=1)
 
     aspect_map = {
         "Skills": "skills",
@@ -182,13 +176,14 @@ with tab1:
 
                 results.append(result)
 
-            sort_key = "Total Match Score (%)" if not selected_sections or len(selected_sections) > 1 else f"{selected_sections[0].capitalize()} Score (%)"
-            sorted_results = sorted(results, key=lambda x: x.get(sort_key, 0), reverse=True)
+            if len(selected_sections) > 1 or not selected_sections:
+                sort_key = "Total Match Score (%)"
+            elif len(selected_sections) == 1:
+                sort_key = f"{selected_sections[0].capitalize()} Score (%)"
+
+            sorted_results = sorted(results, key=lambda x: x.get(sort_key, list(x.values())[-1]), reverse=True)
             st.session_state["results"] = sorted_results
-            if min_score is not None:
-                st.session_state["qualified"] = [r for r in sorted_results if r.get("Total Match Score (%)", list(r.values())[-1]) >= min_score]
-            else:
-                st.session_state["qualified"] = sorted_results
+            st.session_state["qualified"] = [r for r in sorted_results if r.get("Total Match Score (%)", list(r.values())[-1]) >= min_score]
             st.success("Matching complete! View results in the Match Report tab.")
 
 with tab2:
